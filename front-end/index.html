@@ -975,8 +975,39 @@
             window.fileCache.set(path, text);
           }
 
+          // It is not possible to load resources that are not cached and in an encrypted path.
+          const transformHref = (href) => {
+            if (href.startsWith('http') || href.startsWith('//')) {
+              return href;
+            }
+
+            const dummyBase = new URL(
+              window.backFordwardCache.current + '/',
+              location
+            );
+            const absPath = new URL(href, dummyBase).href.slice(
+              location.origin.length
+            );
+            const parent = absPath.slice(0, absPath.lastIndexOf('/')) || '/';
+
+            return (
+              window.fileCache
+                .get(parent)
+                ?.files.find(({ name }) => name === absPath.split('/').pop())
+                ?.url ||
+              window.GLOBAL_CONFIG.SCF_GATEWAY.replace(/\/$/, '') + absPath
+            );
+          };
+
+          const renderer = new marked.Renderer();
+          renderer.image = (href, title, text) =>
+            `<img src="${transformHref(href)}" alt="${text}">`;
+          renderer.link = (href, title, text) =>
+            `<a href="${transformHref(href)}">${text}</a>`;
+
           text = marked.parse(text, {
             gfm: true,
+            renderer: renderer,
             highlight: (code, language, callback) => {
               try {
                 return hljs.highlight(code, {
